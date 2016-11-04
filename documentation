@@ -1,0 +1,178 @@
+// have master create the PCB
+// implement one child
+// get the clock working
+//create a one queue scheduler using round robin
+// add on to the system
+
+// oss:
+    // main program / master process
+    // forks multiple children at random times
+        // randomness simulated by a logical clock controlled by oss
+            // implemented in terms of nanoseconds
+            // resides in shared memory and accessible to children
+            // only advanced by oss, but children can read time
+    // allocate shared memory for system data structures (PCB)
+        // contains information on managing the child process scheduling
+        // must allocate space for scheduling-related items
+            // total CPU time used, total time in the system, time used during
+            // the last burst, process priority, etc.
+    // contains a bit vector to help keep track of the PCBs (pids)
+    // runs concurrently with the user processes
+    // no critical section
+    // after making PCB, bit vector, and other data structures enter into a loop
+        // generates and schedules processes
+            // generates process by allocating and initializing the PCB for the
+            // process and then forks the process.
+        // advance the clock by random amount of nanoseconds [0, 1000] in each
+        // iteration
+            // processes should be generated about once per second
+                // after generates a process, create a time when should generates
+                // another process
+                // should be [0, 2] seconds later
+                // when time is reached, if there is room in the process table
+                // then generate another process, otherwise continue
+    // selects the process to be run and schedule it for execution
+        // selects by using a scheduling algorithm with the following features:
+            // implement a version of multi-level scheduling
+                // four different priority queues:
+                    // high-priority queue (queue0)
+                        // treated as round-robin and never move down (once a
+                        // high priority process always high priority)
+                    // other 3 to be implemented as normal priority multi-level
+                    // feedback queues
+                        // most processes start in queue1, but if ended up
+                        // blocked on io or unable to finish their quantum they
+                        // should go back to the back of that level of queue.
+                        // processes that finish their quantum should be moved
+                        // to the back of a queue one lower. If there are no
+                        // lower queues it should remain in that lowest queue
+                        // unless it ends up not being able to finish its time
+                        // quantum in which case they should be put up to queue
+                        // level 1
+    // should be able to assign total CPU burst time to each process as the
+    // process is generated and keep it in its process control block
+    // each queue is given a time slice
+        // should be different
+            // queue2 has twice the slice of queue1
+            // queue3 has twice the slice of queue2
+    // when a queue has no processes in it, control of the CPU is passed to the
+    // processes on the next queue in the sequence 0->1->2->0
+    // maintain information about the recent CPU usage of a process in order to
+    // determine if it was interrupted by io or if it was allowed to finish its
+    // quantum
+    // tune the schedule to get the best performance under a variety of
+    // conditions
+        // main parameters to adjust are the ratio of cpu time allocated to
+        // high-priority queue as opposed to the lower-priority queues, and the
+        // method by which you decide into which queue a new process should be
+        // placed
+    // dispatch a process by putting the process id and the time quantum into a
+    // predefined location in shared memory
+        // the user process will pick up the quantum value from the shared
+        // memory and schedule itself to run for that long of a time.
+
+// PCB:
+    // resides in shared memory
+    // accessible to the child.
+    // allocate space for up to 18 child processes
+
+// user processes
+    // all user process the same but simulate that they are performing tasks
+    // at random times
+    // process will keep checking the shared memory location if it has been
+    // scheduled and once done, it will start to run.
+        // generate a random number to check whether it will use the entire
+        // quantum or only a part of it (a binary random number will be
+        // sufficient)
+            // this choice determines if it will be using some io that would
+            // cause it to block or if it is a cpu-bound process.
+            // if it has to use only a part of the quantum then it will generate
+            // a random number between [0, quantum] to see how long it runs.
+            // after its allocated time it updates its pcb by adding to the
+            // accumulated cpu time.
+            // joins the ready queue at this point and send a message to master
+            // so it can schedule another process
+        // generate another random number to determine if this is the last
+        // quantum this process needs
+            // should be done if the process has accumulated at least 50ms
+            // if it's done the message should be conveyed to oss to remove its
+            // PCB
+
+// simulation should end with a report on average turnaround time and average
+// awaite time for the processes.
+// also include how long the cpu was idle.
+// make sure signal handling to terminate all processes if needed
+// make sure to remove shared memory and any other resources if used.
+
+
+oss
+Program flow:
+allocate shared memory for PCB
+begin:
+    advance clock [0, 1000] ns
+    generate process
+        set bit vector of PCB to true
+        set up PCB info
+        fork process
+        generate total CPU burst time and add to pcb
+    set time to create new process to be curtime + [0, 2] seconds
+    if curtime = new process spawn time:
+        loop through bit vector
+            if bv[index] = 0
+                generate process ()
+                break
+            if end of loop reached and condition not satisfied:
+                repeat {10 - 17}
+    select process to be ran and schedule it
+        start at queue0
+            attempt to run first element of queue
+                if blocked on io or unable to finish quantum
+                    move to back of queue
+                if process finishes its quantum
+                    move to one queue lower
+                if no lower queues
+                    remain in lowest queue
+                    if unable to finish its quantum
+                        move to queue1
+            when queue has no processes in it, pass control of CPU to one
+            process higher in order of 0->1->2->0->...
+
+user:
+keep checking pcb
+if process is scheduled to run
+    generate random number to checker whether to use entire quantum or part of it
+        0 := io blocked
+        1 := cpu-bound
+    if 0
+        generate random number between [0, quantum] to see how long to run
+    enter queue
+    signal to oss to schedule another process
+if processes turn in queue
+    read time
+    add accumulated time to running total of cpu time in PCB
+    if accumulated time > 50 ms
+        generate random number to determine if this is the last quantum
+    if process is done
+        signal to oss to clear info from PCB
+
+scheduler:
+-- queue0
+    -- highest priority
+    -- round-robin
+    -- never move down
+-- queue1, 2, 3
+    -- normal priority
+    -- queue2 = time_slice(queue1) * 2;
+    -- queue3 = time_slice(queue2) * 2;
+
+Variables:
+    -- PCB pcbs[18]
+    -- bit vector[18]
+
+PCB
+-- total CPU time used
+-- total time in the system
+-- time used during the last burst
+-- process priority
+-- total CPU burst time
+-- recent cpu usage
