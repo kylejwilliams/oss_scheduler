@@ -10,12 +10,14 @@ const int MSG_PROC_NEW = 3; // signal received indicating it's okay to schedule 
 
 int main(int argc, char *argv[])
 {
-    int i; // iterator
-    int next_spawn_time = 0;
+    signal(SIGCHLD, SIG_IGN); //ignore the dead children so we can make new ones
+
+    int i, j; // iterators
+    int next_spawn_time = 0; // time to spawn next process
     time_t t; // used to seed rng
     srand((unsigned)time(&t));
     int bv[MAX_PROCS]; // bit vector to keep track of pcbs
-    for (i = 0; i < MAX_PROCS; i++) bv[i] = 0;
+    for (i = 0; i < MAX_PROCS; i++) bv[i] = 0; // initialize the bv
 
     /////
     // handle cmd args here
@@ -31,8 +33,15 @@ int main(int argc, char *argv[])
     // initialize process control buffers
     shmkey = ftok("/classes/OS/o1-williams", 5);
     int shmid_pcb = shmget(shmkey, sizeof(pcb_t) * MAX_PROCS, 0666 | IPC_CREAT);
-    pcb_t *shmpcb = (pcb_t *) shmat(shmid_pcb, NULL, 0);
-    for (i = 0; i < MAX_PROCS; i++) shmpcb[i].pid = i;
+    pcb_t *shmpcb = (pcb_t *)shmat(shmid_pcb, NULL, 0);
+    shmpcb->pid = 2;
+    for (i = 0; i < MAX_PROCS; i++)
+    {
+        shmpcb[i].pid = 2;
+        shmpcb[i].quantum = 5;
+        shmpcb[i].time_created = 10;
+        shmpcb[i].ttl_burst_time = 15;
+    }
 
     // initialize message buffers
     key_t msgkey = ftok("/classes/OS/o1-williams", 19);
@@ -42,16 +51,63 @@ int main(int argc, char *argv[])
     msgbuf.pid = 0;
 
     // main loop
-    while (shmclock->s < 20)
+    int count;
+    while (shmclock->s < 30)
     {
+        // increment the time
         advance_time(shmclock, rand() % 1000);
 
         // check if it's time to spawn another process
         if (shmclock->s >= next_spawn_time)
         {
-            spawn_process(shmpcb, bv);
-            display_time(*shmclock);
-            next_spawn_time += (rand() % 3);
+            for (i = 0; i < MAX_PROCS; i++)
+            {
+                if (bv[i] == 0) // there is space for another process
+                {
+                    pid_t tpid = fork();
+                    if (tpid == 0) // child process
+                    {
+                        execl("./user", "user", NULL);
+                        break;
+                    }
+                    else if (tpid > 0) // parent process
+                    {
+                        shmpcb[i].pid = tpid;
+                        shmpcb[i].time_created = shmclock->ns;
+                        bv[i] = 1;
+                        count++;
+                        next_spawn_time += (rand() % 3);
+                        break;
+                    }
+                    else
+                    {
+                        perror("fork");
+                        shmdt(shmclock);
+                        shmdt(shmpcb);
+                        shmctl(shmid_clock, IPC_RMID, NULL);
+                        shmctl(shmid_pcb, IPC_RMID, NULL);
+                        msgctl(msqid, IPC_RMID, NULL);
+                        exit(EXIT_FAILURE);
+                    }
+                }
+            }
+        }
+
+        // check if any processes have ended
+        if (get_msg(msqid, MSG_PROC_END, &msgbuf) == 0)
+        {
+            for (i = 0; i < MAX_PROCS; i++)
+            {
+                if ((bv[i] == 1) && (shmpcb[i].pid == msgbuf.pid))
+                {
+                    bv[i] = 0;
+                    shmpcb[i].pid = 4;
+                    shmpcb[i].quantum = 0;
+                    shmpcb[i].time_created = 0;
+                    shmpcb[i].ttl_burst_time = 0;
+                    break;
+                }
+            }
         }
 
         // TODO scheduling algorithm
@@ -61,88 +117,24 @@ int main(int argc, char *argv[])
     // clean up and exit
     /////
 
-    // kill any remaining processes
-    for (i = 0; i < MAX_PROCS; i++)
-    {
-        if (bv[i] == 1) // this process is running
-            kill(shmpcb[i].pid, SIGKILL);
-    }
-
     // wait for any straggling processes
     int status;
     pid_t wpid;
     while ((wpid = wait(&status) > 0)) { };
 
     // clear shared memory
+    printf("procs generated: %d\n", count);
     shmdt(shmclock);
     shmdt(shmpcb);
     shmctl(shmid_clock, IPC_RMID, NULL);
     shmctl(shmid_pcb, IPC_RMID, NULL);
+    msgctl(msqid, IPC_RMID, NULL);
 
     // program exited successfully
     exit(EXIT_SUCCESS);
 }
 
-void clean_and_exit(int exit_status, int *id_clock, int bv[], myclock_t *clck, int *id_pcb, pcb_t *pcb)
-{
-    // close any running processes
-    int i;
-    for (i = 0; i < MAX_PROCS; i++)
-    {
-        if (bv[i] == 1) // this process is running
-            kill(pcb[i].pid, SIGKILL);
-    }
-
-    int status;
-    pid_t wpid;
-    while ((wpid = wait(&status) > 0)) { };
-
-    // clear shared memory
-    shmdt(clck);
-    shmdt(pcb);
-    shmctl(*id_clock, IPC_RMID, NULL);
-    shmctl(*id_pcb, IPC_RMID, NULL);
-
-    exit(exit_status);
-}
-
-int spawn_process(pcb_t *pcb, int bv[])
-{
-    int i;
-    for (i = 0; i < MAX_PROCS; i++)
-    {
-        if (bv[i] == 0) // there is space for another process
-        {
-            if ((pcb[i].pid = fork()) == 0) // child process
-                execl("./user", "user", NULL);
-            else if (pcb[i].pid > 0) // parent process
-            {
-                // set the bit vector to indicate this slot is full
-                bv[i] = 1;
-                for (i = 0; i < MAX_PROCS; i++)
-                    printf("%d ", bv[i]);
-                printf("\n");
-
-                // allocate the rest of the pcb info
-                printf("%d\n", pcb[i].pid);
-
-                return 0; // successfully spawned a process
-            }
-            else // fork unsuccessful
-            {
-                perror("fork");
-                return -1; // tell main to prepare to terminate
-            }
-        }
-    }
-
-    return 1; // could not create a process
-}
-
-void display_time(myclock_t clck)
-{
-    printf("%ds:%dns\n", clck.s, clck.ns);
-}
+void display_time(myclock_t clck) { printf("%ds:%dns\n", clck.s, clck.ns); }
 
 void advance_time(myclock_t *clck, int ns)
 {
@@ -150,7 +142,7 @@ void advance_time(myclock_t *clck, int ns)
     if (clck->ns > NS_IN_S)
     {
             clck->s++;
-            clck->ns = (NS_IN_S - clck->ns > 0) ? NS_IN_S - clck->ns : 0; // reset ns
+            clck->ns = (NS_IN_S - clck->ns > 0) ? clck->ns - NS_IN_S : 0; // reset ns
     }
 
 }
