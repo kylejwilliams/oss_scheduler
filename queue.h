@@ -2,16 +2,34 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include <stdlib.h>
+#include<stdio.h>
+#include<stdlib.h>
 
-typedef struct node node_t;
-struct node { pid_t pid; int time_slice; node_t *ptr; };
+typedef struct
+{
+        int capacity; // maximum number of elements in the queue
+        int size;   // current number of elements in the queue
+        int front; // index of the front of the queue
+        int rear; // index of the rear of the queue
+        pid_t *elements; // array of elements in the queue
+} queue_t;
 
-pid_t front_element();
-void enq(pid_t pid);
-int deq();
-int empty();
-void create();
-int queue_size();
+// creates a queue of a given max size
+queue_t *create_queue(int max_elements);
+
+// search queue for given element
+int is_present(queue_t *Q, pid_t elem);
+
+// remove element from front of queue
+int deq(queue_t *Q);
+
+// display the contents of the queue
+void prnt(queue_t *Q);
+
+// returns the element at the front of the queue
+pid_t peek(queue_t *Q);
+
+// add element to end of queue
+int enq(queue_t *Q, pid_t element);
 
 #endif

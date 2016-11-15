@@ -1,70 +1,90 @@
 
 #include "queue.h"
 
-int count = 0;
-node_t *front, *rear, *temp, *front1;
-
-void enq(pid_t pid)
+// creates a queue of a given max size
+queue_t *create_queue(int max_elements)
 {
-    if (rear == NULL)
-    {
-        rear = (node_t *)malloc(sizeof(node_t));
-        rear->ptr = NULL;
-        rear->pid = 0;
-        front = rear;
-    }
+        /* Create a Queue */
+        queue_t *Q;
+        Q = (queue_t *)malloc(sizeof(queue_t));
+        /* Initialise its properties */
+        Q->elements = (int *)malloc(sizeof(int)*max_elements);
+        Q->size = 0;
+        Q->capacity = max_elements;
+        Q->front = 0;
+        Q->rear = -1;
+        /* Return the pointer */
+        return Q;
+}
+
+// search queue for given element
+// returns 1 if present; 0 otherwise
+int is_present(queue_t *Q, pid_t elem)
+{
+    int i;
+    if (Q->size == 0)
+        return 1; // no elements in queue, so elem not present
     else
     {
-        temp = (node_t *)malloc(sizeof(node_t));
-        rear->ptr = temp;
-        temp->pid = pid;
-        temp->ptr = NULL;
-
-        rear = temp;
+        for (i = 0; i < Q->size; i++)
+        {
+            printf("queue: %d | elem: %d\n", Q->elements[Q->front + i], elem);
+            if (Q->elements[Q->front + i] == elem)
+                return 1; // match found
+        }
     }
-    count++;
+    return 0; // no match found;
 }
 
-int deq()
+// remove element from front of queue
+int deq(queue_t *Q)
 {
-    front1 = front;
+        /* If Queue size is zero then it is empty. So we cannot pop */
+        if (Q->size == 0)
+            return 1;
 
-    // no elements in queue
-    if (front1 == NULL)
-        return -1;
+        Q->size--;
+        Q->front++;
 
-    // more than 1 element in queue
-    if (front1->ptr != NULL)
-    {
-        front1 = front1->ptr;
-        free(front);
-        front = front1;
-    }
-    // 1 element in queue
-    else
-    {
-        free(front);
-        front = NULL;
-        rear = NULL;
-    }
-    count--;
-    return 0; // success
+        /* As we fill elements in circular fashion */
+        if (Q->front == Q->capacity)
+            Q->front = 0;
+        return 0;
 }
 
-pid_t front_element()
+void prnt(queue_t *Q)
 {
-    if ((front != NULL) && (rear != NULL))
-        return front->pid;
-    else return -1;
+    int i;
+    for (i = 0; i < Q->size; i++)
+        printf("%d ", Q->elements[Q->front + i]);
+    printf("\n");
 }
 
-int empty()
+// returns the element at the front of the queue
+pid_t peek(queue_t *Q)
 {
-    if ((front == NULL) && (rear == NULL))
-        return 0; // queue is empty
-    else
-        return 1; // not empty
+        if (Q->size == 0)
+            return -1;
+        else
+            return Q->elements[Q->front];
 }
 
-int queue_size() { return count; }
-void create() { front = rear = NULL; }
+// add element to end of queue
+int enq(queue_t *Q, pid_t element)
+{
+        // If the Queue is full, we cannot push an element into it as there
+        // is no space for it
+        if (Q->size == Q->capacity)
+            return -1;
+
+        Q->size++;
+        Q->rear = Q->rear + 1;
+
+        /* As we fill the queue in circular fashion */
+        if(Q->rear == Q->capacity)
+            Q->rear = 0;
+
+        /* Insert the element in its rear side */
+        Q->elements[Q->rear] = element;
+        return 0;
+}

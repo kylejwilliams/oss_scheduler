@@ -1,3 +1,4 @@
+
 #ifndef USER_H
 #define USER_H
 
@@ -12,9 +13,26 @@
 #include <signal.h>
 #include <wait.h>
 
-#include "msg_hndlr.h"
-
 typedef struct { int s, ns; } myclock_t;
-typedef struct { pid_t pid; int time_created; int quantum; int ttl_burst_time; } pcb_t;
+typedef struct
+{
+    pid_t pid;
+
+    int wait_time_s;
+    int wait_time_ns;
+    int ttl_burst_time;
+    int remaining_time;
+    int is_scheduled;
+    int is_finished;
+    int quantum;
+    int time_this_burst;
+
+    // should both be myclock_t, but weird memory problems putting it into shared
+    // memory since since they would be a struct inside of a struct
+    int time_since_last_burst_s;
+    int time_since_last_burst_ns;
+    int arrival_time_s;
+    int arrival_time__ns;
+} pcb_t;
 
 #endif

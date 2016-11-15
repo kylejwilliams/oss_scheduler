@@ -1,0 +1,33 @@
+Scheduling Exercise
+Project 4 - CS 4760
+
+Kyle Williams
+04 November 2016
+
+To Run Program:
+---------------
+This program takes 5 optional command line arguments as follows:
+    -h, --help  displays a help message
+    -q          specify a value for the quantum in ns
+                DEFAULT: 10 ms
+    -t          specify the amount of time the program should run in s
+                DEFAULT: 30 s
+    -f          specify the file to save program output
+                DEFAULT: out.log
+    -p          specify the processes run time
+                DEFAULT: 50 ms
+
+After execution, a file will be generated in the program's calling directory
+containing output for the program. The output shows the how the child processes
+have been scheduled over the given duration. It records things such as when new
+processes have been generated, when a process is given priority of the queue,
+when the process is dispatched from the queue, when a process has finished executing,
+and finally a summary of the average wait time and average turnover rate of the
+processes.
+
+Special notes:
+--------------
+-- multilevel queue has not been implemented, just the round robin
+-- for some reason when execution is finished the line 'Putting process with PID
+    x into queue 1'. This is because of how it handles clearing the processes
+    when executing has concluded

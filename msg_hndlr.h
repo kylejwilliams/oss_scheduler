@@ -1,6 +1,6 @@
 
-#ifndef MSG_HNDLER_H
-#define MSG_HNDLER_H
+#ifndef MSG_HNDLR_H
+#define MSG_HNDLR_H
 
 #include <time.h>
 #include <sys/msg.h>
